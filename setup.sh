@@ -49,6 +49,7 @@ check_prereq "python3"
 if command -v node &> /dev/null && command -v npx &> /dev/null; then
     log_info "Node.js and npx are already installed: $(node -v)"
 else
+    set +eu
     if [ -s "$HOME/.nvm/nvm.sh" ]; then
         log_info "NVM is already installed. Loading NVM..."
         . "$HOME/.nvm/nvm.sh"
@@ -61,6 +62,7 @@ else
     nvm install --lts &> /dev/null
     nvm use --lts &> /dev/null
     nvm alias default 'lts/*' &> /dev/null
+    set -eu
 fi
 
 if command -v agy &> /dev/null; then
