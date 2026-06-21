@@ -36,13 +36,13 @@ agy
 
 [MIT License](LICENSE)
 
-[contributors-shield]: https://img.shields.io/github/contributors/m-shigemori/gemini_mcp_suite?style=for-the-badge
-[contributors-url]: https://github.com/m-shigemori/gemini_mcp_suite/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/m-shigemori/gemini_mcp_suite?style=for-the-badge
-[forks-url]: https://github.com/m-shigemori/gemini_mcp_suite/network/members
-[stars-shield]: https://img.shields.io/github/stars/m-shigemori/gemini_mcp_suite?style=for-the-badge
-[stars-url]: https://github.com/m-shigemori/gemini_mcp_suite/stargazers
-[issues-shield]: https://img.shields.io/github/issues/m-shigemori/gemini_mcp_suite?style=for-the-badge
-[issues-url]: https://github.com/m-shigemori/gemini_mcp_suite/issues
-[license-shield]: https://img.shields.io/github/license/m-shigemori/gemini_mcp_suite?style=for-the-badge
-[license-url]: https://github.com/m-shigemori/gemini_mcp_suite/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/github/contributors/m-shigemori/agy_mcp_suite?style=for-the-badge
+[contributors-url]: https://github.com/m-shigemori/agy_mcp_suite/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/m-shigemori/agy_mcp_suite?style=for-the-badge
+[forks-url]: https://github.com/m-shigemori/agy_mcp_suite/network/members
+[stars-shield]: https://img.shields.io/github/stars/m-shigemori/agy_mcp_suite?style=for-the-badge
+[stars-url]: https://github.com/m-shigemori/agy_mcp_suite/stargazers
+[issues-shield]: https://img.shields.io/github/issues/m-shigemori/agy_mcp_suite?style=for-the-badge
+[issues-url]: https://github.com/m-shigemori/agy_mcp_suite/issues
+[license-shield]: https://img.shields.io/github/license/m-shigemori/agy_mcp_suite?style=for-the-badge
+[license-url]: https://github.com/m-shigemori/agy_mcp_suite/blob/main/LICENSE
