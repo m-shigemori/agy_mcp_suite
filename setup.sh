@@ -10,9 +10,48 @@ log_info() { echo -e "\e[32m[INFO]\e[0m $1"; }
 log_warn() { echo -e "\e[33m[WARN]\e[0m $1"; }
 log_error() { echo -e "\e[31m[ERROR]\e[0m $1"; }
 
-REPO_DIR=$(pwd)
+REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 AGY_CLI_DIR="$HOME/.gemini/antigravity-cli"
 AGY_CONFIG_DIR="$HOME/.gemini/config"
+
+# Options
+ASSUME_YES=false
+show_help() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -y, --yes     Non-interactive mode (automatically accept prompts)"
+    echo "  -h, --help    Show this help message"
+}
+
+# Parse options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -y|--yes)
+            ASSUME_YES=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Prerequisites check
+check_prereq() {
+    local cmd="$1"
+    if ! command -v "$cmd" &> /dev/null; then
+        log_error "Required command '$cmd' is not installed. Please install it and try again."
+        exit 1
+    fi
+}
+check_prereq "curl"
+check_prereq "python3"
 
 # 1. Setup Node.js via NVM (Skip if node/npx is already available or NVM is installed)
 if command -v node &> /dev/null && command -v npx &> /dev/null; then
@@ -43,18 +82,58 @@ else
 fi
 
 # 3. GitHub Token Input & Validation
+validate_github_token() {
+    local token="$1"
+    if [ -z "$token" ]; then
+        return 1
+    fi
+
+    if [[ ! "$token" =~ ^gh[p|o|u|r]_[a-zA-Z0-9]{36,255}$ ]] && [[ ${#token} -lt 40 ]]; then
+        log_warn "Token format does not match typical GitHub Personal Access Token patterns."
+    fi
+
+    log_info "Verifying GitHub token validity via API..."
+    local http_status
+    http_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $token" https://api.github.com/user)
+
+    if [ "$http_status" -eq 200 ]; then
+        log_info "GitHub token verified successfully."
+        return 0
+    else
+        log_error "GitHub API returned HTTP status $http_status. Token may be invalid or expired."
+        return 1
+    fi
+}
+
 GITHUB_TOKEN=""
 if [ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" ]; then
     log_info "Found GITHUB_PERSONAL_ACCESS_TOKEN in environment."
-    GITHUB_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN"
+    if validate_github_token "$GITHUB_PERSONAL_ACCESS_TOKEN"; then
+        GITHUB_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN"
+    else
+        log_warn "Environment GITHUB_PERSONAL_ACCESS_TOKEN is invalid."
+    fi
 fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
+    if [ "$ASSUME_YES" = true ]; then
+        log_error "GitHub Token is required but missing or invalid in non-interactive mode."
+        exit 1
+    fi
+
     while [ -z "$GITHUB_TOKEN" ]; do
         read -sp "Enter your GitHub Personal Access Token (input is hidden): " GITHUB_TOKEN
         echo
         if [ -z "$GITHUB_TOKEN" ]; then
             log_error "Token is required. Please try again."
+        else
+            if ! validate_github_token "$GITHUB_TOKEN"; then
+                log_warn "Token validation failed."
+                read -p "Proceed with this token anyway? [y/N]: " -r PROCEED
+                if [[ ! "$PROCEED" =~ ^[Yy]$ ]]; then
+                    GITHUB_TOKEN=""
+                fi
+            fi
         fi
     done
 fi
@@ -64,9 +143,19 @@ update_bashrc() {
     local key="$1"
     local val="$2"
     local line="export $key=\"$val\""
+    
+    # Ensure ~/.bashrc exists
+    touch "$HOME/.bashrc"
+    
+    # Backup ~/.bashrc on first update
+    if [ ! -f "$HOME/.bashrc.bak" ]; then
+        cp "$HOME/.bashrc" "$HOME/.bashrc.bak"
+        log_info "Created backup of ~/.bashrc at ~/.bashrc.bak"
+    fi
+
     if grep -q "export $key=" "$HOME/.bashrc"; then
-        # Replace existing export
-        sed -i -e "s|export $key=.*|$line|g" "$HOME/.bashrc"
+        # Replace existing export safely
+        sed "s|export $key=.*|$line|g" "$HOME/.bashrc" > "$HOME/.bashrc.tmp" && mv "$HOME/.bashrc.tmp" "$HOME/.bashrc"
     else
         # Append new export
         echo "$line" >> "$HOME/.bashrc"
@@ -89,12 +178,16 @@ merge_json() {
     local placeholder_key="${3:-}"
     local placeholder_val="${4:-}"
     
-    python3 -c "
-import json, os, sys
+    python3 - "$src" "$dest" "$placeholder_key" "$placeholder_val" "$REPO_DIR" << 'EOF'
+import json
+import os
+import sys
+
 src_path = sys.argv[1]
 dest_path = sys.argv[2]
-pkey = sys.argv[3] if len(sys.argv) > 3 else None
-pval = sys.argv[4] if len(sys.argv) > 4 else None
+pkey = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
+pval = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else None
+repo_dir = sys.argv[5] if len(sys.argv) > 5 else ""
 
 with open(src_path, 'r') as f:
     src_data = json.load(f)
@@ -142,14 +235,14 @@ deep_merge(dest_data, src_data)
 # Ensure current workspace is trusted
 if 'trustedWorkspaces' in dest_data:
     ws = dest_data['trustedWorkspaces']
-    target_ws = '$REPO_DIR'
-    if target_ws not in ws:
+    target_ws = repo_dir
+    if target_ws and target_ws not in ws:
         ws.append(target_ws)
     dest_data['trustedWorkspaces'] = ws
 
 with open(dest_path, 'w') as f:
     json.dump(dest_data, f, indent=2)
-" "$src" "$dest" "$placeholder_key" "$placeholder_val"
+EOF
 }
 
 # 5. Copy and Merge Configurations
@@ -171,12 +264,18 @@ log_info "Successfully installed skills to $AGY_CONFIG_DIR/skills/"
 
 # 6. Repository Cleanup prompt
 echo
-read -p "Delete this setup repository directory ($REPO_DIR)? [y/N]: " -r DELETE_REPO
-if [[ "$DELETE_REPO" =~ ^[Yy]$ ]]; then
+if [ "$ASSUME_YES" = true ]; then
+    log_info "Automatically deleting setup repository directory ($REPO_DIR)..."
     rm -rf "$REPO_DIR"
     log_info "Repository directory deleted."
 else
-    log_info "Repository directory kept."
+    read -p "Delete this setup repository directory ($REPO_DIR)? [y/N]: " -r DELETE_REPO
+    if [[ "$DELETE_REPO" =~ ^[Yy]$ ]]; then
+        rm -rf "$REPO_DIR"
+        log_info "Repository directory deleted."
+    else
+        log_info "Repository directory kept."
+    fi
 fi
 
 log_info "Setup completed successfully! Please run 'source ~/.bashrc' to apply environment variables."
