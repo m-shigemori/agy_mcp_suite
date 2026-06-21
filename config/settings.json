@@ -1,0 +1,13 @@
+{
+  "toolPermission": "always-proceed",
+  "trustedWorkspaces": [
+    "HOME_DIR_PLACEHOLDER/colcon_ws/src"
+  ],
+  "permissions": {
+    "allow": [
+      "mcp(github/*)",
+      "mcp(context7/*)",
+      "mcp(playwright/*)"
+    ]
+  }
+}
